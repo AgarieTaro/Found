@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Novel Game</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    overflow:hidden;
+    background:#000;
+    font-family:"Yu Gothic",sans-serif;
+}
+
+#game{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+}
+
+/* 背景 */
+#background{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    z-index:1;
+}
+
+/* 立ち絵 */
+#character{
+    position:absolute;
+    bottom:0;
+    left:50%;
+    transform:translateX(-50%);
+    max-height:95%;
+    max-width:80%;
+    z-index:2;
+}
+
+/* スチル */
+#still{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    z-index:20;
+    display:none;
+}
+
+/* テキストウインドウ */
+#textbox{
+    position:absolute;
+    left:50%;
+    bottom:20px;
+    transform:translateX(-50%);
+    width:90%;
+    height:180px;
+
+    background:rgba(0,0,0,0.75);
+    border:2px solid white;
+    border-radius:12px;
+
+    color:white;
+
+    opacity:0;
+    transition:opacity 1s;
+
+    z-index:10;
+}
+
+#text{
+    padding:25px;
+    font-size:30px;
+    line-height:1.6;
+}
+
+/* 入力エリア */
+#inputArea{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    z-index:15;
+    display:none;
+}
+
+#answerInput{
+    width:350px;
+    height:55px;
+    font-size:28px;
+    text-align:center;
+}
+
+/* 選択肢 */
+#choiceArea{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    display:none;
+
+    z-index:15;
+
+    flex-direction:column;
+    gap:15px;
+}
+
+.choiceBtn{
+    width:350px;
+    padding:15px;
+
+    font-size:24px;
+
+    cursor:pointer;
+
+    border:none;
+    border-radius:8px;
+
+    background:white;
+}
+
+.choiceBtn:hover{
+    opacity:0.85;
+}
+
+/* スチル時ボタン */
+#stillButtonArea{
+    position:absolute;
+    left:50%;
+    bottom:80px;
+
+    transform:translateX(-50%);
+
+    z-index:30;
+
+    display:none;
+}
+
+#stillButton{
+    font-size:28px;
+
+    padding:18px 40px;
+
+    cursor:pointer;
+
+    border:none;
+    border-radius:10px;
+}
+
+/* クリック誘導 */
+#clickHint{
+    position:absolute;
+    right:25px;
+    bottom:20px;
+
+    font-size:20px;
+    color:white;
+
+    z-index:12;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+
+    <!-- 背景 -->
+    <img
+        id="background"
+        src="background.png"
+        alt=""
+    >
+
+    <!-- 立ち絵 -->
+    <img
+        id="character"
+        src="character1.png"
+        alt=""
+    >
+
+    <!-- スチル -->
+    <img
+        id="still"
+        src=""
+        alt=""
+    >
+
+    <!-- テキスト -->
+    <div id="textbox">
+
+        <div id="text"></div>
+
+        <div id="clickHint">
+            Click
+        </div>
+
+    </div>
+
+    <!-- 入力 -->
+    <div id="inputArea">
+
+        <input
+            type="text"
+            id="answerInput"
+            autocomplete="off"
+        >
+
+    </div>
+
+    <!-- 選択肢 -->
+    <div id="choiceArea"></div>
+
+    <!-- スチル用ボタン -->
+    <div id="stillButtonArea">
+
+        <button id="stillButton">
+            もう一度会いに行く
+        </button>
+
+    </div>
+
+</div>
+
+<script>
+
+/* ===== DOM取得 ===== */
+
+const textbox =
+    document.getElementById("textbox");
+
+const text =
+    document.getElementById("text");
+
+const background =
+    document.getElementById("background");
+
+const character =
+    document.getElementById("character");
+
+const still =
+    document.getElementById("still");
+
+const inputArea =
+    document.getElementById("inputArea");
+
+const answerInput =
+    document.getElementById("answerInput");
+
+const choiceArea =
+    document.getElementById("choiceArea");
+
+const stillButtonArea =
+    document.getElementById("stillButtonArea");
+
+const stillButton =
+    document.getElementById("stillButton");
+
+
+/* ===== 立ち絵 ===== */
+
+function normalFace(){
+    character.src = "character1.png";
+}
+
+function testFace(){
+    character.src = "character2.png";
+}
+
+function wrongFace(){
+    character.src = "character3.png";
+}
+
+function correctFace(){
+    character.src = "character4.png";
+}
+
+/* ===== 状態管理 ===== */
+
+let clickEnabled = false;
+let currentMessages = [];
+let currentIndex = 0;
+let afterMessagesCallback = null;
+
+
+/* ===== テキスト表示 ===== */
+
+function showMessageList(messages, callback){
+
+    currentMessages = messages;
+    currentIndex = 0;
+    afterMessagesCallback = callback;
+
+    text.textContent =
+        currentMessages[currentIndex];
+
+    clickEnabled = true;
+}
+
+
+/* ===== テキスト送り ===== */
+
+document.addEventListener("click",(e)=>{
+
+    if(!clickEnabled) return;
+
+    if(
+        inputArea.style.display === "block" ||
+        choiceArea.style.display === "flex" ||
+        stillButtonArea.style.display === "block"
+    ){
+        return;
+    }
+
+    currentIndex++;
+
+    if(currentIndex < currentMessages.length){
+
+        text.textContent =
+            currentMessages[currentIndex];
+
+        return;
+    }
+
+    clickEnabled = false;
+
+    if(afterMessagesCallback){
+        afterMessagesCallback();
+    }
+
+});
+
+
+/* ===== テキストウインドウ表示 ===== */
+
+function showTextbox(callback){
+
+    textbox.style.opacity = "0";
+
+    setTimeout(()=>{
+
+        textbox.style.opacity = "1";
+
+        setTimeout(()=>{
+
+            if(callback){
+                callback();
+            }
+
+        },1000);
+
+    },2000);
+
+}
+
+
+/* ===== 入力問題 ===== */
+
+function askTextQuestion(
+    question,
+    answers,
+    successCallback
+){
+
+    testFace();
+
+    text.textContent = question;
+
+    inputArea.style.display = "block";
+
+    answerInput.value = "";
+
+    answerInput.focus();
+
+    answerInput.onkeydown = function(event){
+
+        if(event.key !== "Enter"){
+            return;
+        }
+
+        const value =
+            answerInput.value.trim();
+
+        if(answers.includes(value)){
+
+            inputArea.style.display = "none";
+
+            showCorrectSequence(
+                successCallback
+            );
+
+        }else{
+
+            wrongFace();
+
+            text.textContent =
+                "ちがうでしょ";
+
+            answerInput.value = "";
+
+            setTimeout(()=>{
+
+                testFace();
+
+                text.textContent =
+                    question;
+
+                answerInput.focus();
+
+            },1000);
+
+        }
+
+    };
+
+}
+
+
+/* ===== 正解演出 ===== */
+
+function showCorrectSequence(callback){
+
+    correctFace();
+
+    showMessageList(
+
+        [
+            "大正解～！！"
+        ],
+
+        ()=>{
+
+            normalFace();
+
+            showMessageList(
+
+                [
+                    "素直でかわいい君はおうちに返してあげる",
+                    "また会おうね"
+                ],
+
+                callback
+
+            );
+
+        }
+
+    );
+
+}
+
+
+/* ===== スチル表示 ===== */
+
+function showStill(
+    imageName,
+    callback
+){
+
+    textbox.style.display = "none";
+
+    background.style.display = "none";
+
+    character.style.display = "none";
+
+    still.src = imageName;
+    still.style.display = "block";
+
+    stillButtonArea.style.display =
+        "block";
+
+    stillButton.onclick = ()=>{
+
+        stillButtonArea.style.display =
+            "none";
+
+        still.style.display = "none";
+
+        background.style.display = "block";
+
+        character.style.display = "block";
+
+        textbox.style.display = "block";
+
+        normalFace();
+
+        if(callback){
+            callback();
+        }
+
+    };
+
+}
+
+
+/* ===== 第1回 ===== */
+
+function startFirstVisit(){
+
+    showTextbox(()=>{
+
+        showMessageList(
+
+            [
+                "あーい！待ってたよ～",
+                "君から会いに来てくれて嬉しいなぁ",
+                "愛を確かめるためのテストをしよっか"
+            ],
+
+            ()=>{
+
+                askTextQuestion(
+
+                    "あなたが愛しているのは誰？",
+
+                    [
+                        "あい",
+                        "あいちゃん"
+                    ],
+
+                    ()=>{
+
+                        showStill(
+
+                            "still1.png",
+
+                            startSecondVisit
+
+                        );
+
+                    }
+
+                );
+
+            }
+
+        );
+
+    });
+
+}
+
+
+/* ===== 第2回 ===== */
+
+function startSecondVisit(){
+
+    showTextbox(()=>{
+
+        showMessageList(
+
+            [
+                "あーい！待ってたよ～",
+                "君から会いに来てくれて嬉しいなぁ",
+                "愛を確かめるためのテストをしよっか"
+            ],
+
+            ()=>{
+
+                askTextQuestion(
+
+                    "あいの誕生日は？",
+
+                    [
+                        "0205"
+                    ],
+
+                    ()=>{
+
+                        showStill(
+
+                            "still2.png",
+
+                            startThirdVisit
+
+                        );
+
+                    }
+
+                );
+
+            }
+
+        );
+
+    });
+
+}
+
+
+/* ===== 第3回 ===== */
+
+function startThirdVisit(){
+
+    showTextbox(()=>{
+
+        showMessageList(
+
+            [
+                "あーい！待ってたよ～",
+                "君から会いに来てくれて嬉しいなぁ",
+                "愛を確かめるためのテストをしよっか"
+            ],
+
+            ()=>{                askTextQuestion(
+
+                    "得意なことは？",
+
+                    [
+                        "運動"
+                    ],
+
+                    ()=>{
+
+                        showStill(
+
+                            "still2.png",
+
+                            startFourthVisit
+
+                        );
+
+                    }
+
+                );
+
+            }
+
+        );
+
+    });
+
+}
+
+
+/* ===== 第4回 ===== */
+
+function startFourthVisit(){
+
+    showTextbox(()=>{
+
+        showMessageList(
+
+            [
+                "あーい！待ってたよ～",
+                "君から会いに来てくれて嬉しいなぁ",
+                "愛を確かめるためのテストをしよっか"
+            ],
+
+            ()=>{
+
+                askFoodQuestion();
+
+            }
+
+        );
+
+    });
+
+}
+
+
+/* ===== 選択肢問題 ===== */
+
+function askFoodQuestion(){
+
+    testFace();
+
+    text.textContent =
+        "あいが気になっている食べ物は？";
+
+    choiceArea.innerHTML = "";
+
+    choiceArea.style.display = "flex";
+
+    const choices = [
+
+        "いちごミルク",
+        "タピオカ",
+        "マカロン",
+        "わたあめ",
+        "大福"
+
+    ];
+
+    const correctChoices = [
+
+        "いちごミルク",
+        "マカロン",
+        "わたあめ"
+
+    ];
+
+    choices.forEach(choice=>{
+
+        const button =
+            document.createElement("button");
+
+        button.className =
+            "choiceBtn";
+
+        button.textContent =
+            choice;
+
+        button.onclick = ()=>{
+
+            if(
+                correctChoices.includes(choice)
+            ){
+
+                choiceArea.style.display =
+                    "none";
+
+                showCorrectSequence(
+
+                    ()=>{
+
+                        showStill(
+
+                            "still2.png",
+
+                            showEnding
+
+                        );
+
+                    }
+
+                );
+
+            }else{
+
+                wrongFace();
+
+                text.textContent =
+                    "ちがうでしょ";
+
+                setTimeout(()=>{
+
+                    testFace();
+
+                    text.textContent =
+                        "あいが気になっている食べ物は？";
+
+                },1000);
+
+            }
+
+        };
+
+        choiceArea.appendChild(button);
+
+    });
+
+}
+
+
+/* ===== エンディング ===== */
+
+function showEnding(){
+
+    textbox.style.opacity = "1";
+
+    showMessageList(
+
+        [
+            "また来てくれたんだ",
+            "良いリスナーさんに会えてあいは幸せだな",
+            "また配信で会おうね"
+        ],
+
+        ()=>{
+
+            showFinalStill();
+
+        }
+
+    );
+
+}
+
+
+/* ===== 最終スチル ===== */
+
+function showFinalStill(){
+
+    textbox.style.display = "none";
+
+    background.style.display = "none";
+
+    character.style.display = "none";
+
+    still.src = "still3.png";
+
+    still.style.display = "block";
+
+}
+
+
+/* ===== ゲーム開始 ===== */
+
+window.onload = ()=>{
+
+    startFirstVisit();
+
+};
+
+</script>
+
+</body>
+</html>
